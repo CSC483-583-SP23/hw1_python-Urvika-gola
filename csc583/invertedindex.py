@@ -1,4 +1,5 @@
 import re
+from typing import Dict
 
 
 class InvertedIndex:
@@ -123,7 +124,7 @@ class InvertedIndex:
             del split_query[operator_idx - 1: operator_idx + 2]
         return ["Doc" + str(value) for value in store_intermediate_results[split_query[0]]]
 
-    def _create_inverted_index(self, lines: list[str]) -> dict[str, list]:
+    def _create_inverted_index(self, lines: list[str]) -> Dict[str, list]:
         """
         Private method to create the inverted index
         :param lines: the lines of the Docs.txt as a String Array
