@@ -64,28 +64,28 @@ class InvertedIndex:
         3. (drug OR treatment) AND schizophrenia
         Note that for the 3rd type, the parentheses will be removed and "AND" operation will precede over "OR"
         :param query: the input query
-        :return: a list of sorted DocIDs
+        :return: the result of the query, as a list of sorted DocIDs
         """
-
         lines = self.read_txt_file(self.doc)  # read the text file and create an array of lines
         inverted_index = self._create_inverted_index(lines)  # create an inverted index
         query = re.sub(r"[()]", "", query)  # remove any ( or ) parentheses from the query
         split_query = query.split()  # split the query on basis of space
+        store_intermediate_results = {}  # a dict that saves result of the parts of query that have been calculated
 
         if len(split_query) < 3:
             print(f"Invalid query {query}, there should be minium 3 parts supplied, <'operand' 'operator' 'operand'>")
             return []
 
-        store_intermediate_results = {}
-
         # first we will solve all the ANDs present in the query, if it's not present then we will check for ORs
         while len(split_query) > 1 and 'AND' in split_query:
             operator_idx = split_query.index('AND')  # note that the AND should be an upper case literal
             first_operand_result, second_operand_result = None, None
+            # if the right or left operand results are already in the intermediate result hashmap, then use it
             if split_query[operator_idx - 1] in store_intermediate_results:
                 first_operand_result = store_intermediate_results[split_query[operator_idx - 1]]
             if split_query[operator_idx + 1] in store_intermediate_results:
                 second_operand_result = store_intermediate_results[split_query[operator_idx + 1]]
+            # otherwise, get the result right or right operand from the inverted index.
             try:
                 intermediate_result = self._calculate_and(
                     first_operand_result if first_operand_result is not None else inverted_index[
@@ -96,18 +96,23 @@ class InvertedIndex:
                 print(f"Invalid Query: The word '{e.args[0]}' is not in the documents, the query can't be calculated.")
                 return []
             key = f"{split_query[operator_idx - 1]} {split_query[operator_idx]} {split_query[operator_idx + 1]}"
+            # update the intermediate result dictionary with the result of the part of the query that is calculated
             store_intermediate_results[key] = intermediate_result
+            # insert this result just after the left operand of the query
             split_query.insert(operator_idx + 2, key)
+            # remove the right and left operands and the operator as this result has been calculated
             del split_query[operator_idx - 1: operator_idx + 2]
 
-        # second, we will solve all the ORs present in the query.
+        # second, we will solve all the ORs present in the query
         while len(split_query) > 1 and 'OR' in split_query:
             operator_idx = split_query.index('OR')  # note that the OR should be an upper case literal
             first_operand_result, second_operand_result = None, None
+            # if the right or left operand results are already in the intermediate result hashmap, then use it
             if split_query[operator_idx - 1] in store_intermediate_results:
                 first_operand_result = store_intermediate_results[split_query[operator_idx - 1]]
             if split_query[operator_idx + 1] in store_intermediate_results:
                 second_operand_result = store_intermediate_results[split_query[operator_idx + 1]]
+            # otherwise, get the result right or right operand from the inverted index
             try:
                 intermediate_result = self._calculate_or(
                     first_operand_result if first_operand_result is not None else inverted_index[
@@ -118,8 +123,11 @@ class InvertedIndex:
                 print(f"Invalid Query: The word '{e.args[0]}' is not in the documents, the query can't be calculated.")
                 return []
             key = f"{split_query[operator_idx - 1]} {split_query[operator_idx]} {split_query[operator_idx + 1]}"
+            # update the intermediate result dictionary with the result of the part of the query that is calculated
             store_intermediate_results[key] = intermediate_result
+            # insert this result just after the left operand of the query
             split_query.insert(operator_idx + 2, key)
+            # remove the right and left operands and the operator as this result has been calculated
             del split_query[operator_idx - 1: operator_idx + 2]
         return ["Doc" + str(value) for value in store_intermediate_results[split_query[0]]]
 
@@ -129,7 +137,7 @@ class InvertedIndex:
         :param lines: the lines of the Docs.txt as a String Array
         :return: a dictionary containing the inverted index with key as the word and value as the posting list
         """
-        doc_id_with_line = {}
+        doc_id_with_line = {}  # creates a dict as shown below
         # {1: 'Doc1    breakthrough drug for schizophrenia', 2: 'Doc2    new approach for treatment of schizophrenia',
         # 3: 'Doc3    new hopes for schizophrenia patients', 4: 'Doc4    new schizophrenia drug'}
         inverted_index = {}
@@ -162,14 +170,15 @@ class InvertedIndex:
         :param line: the line containing the docID and words e.g. "Doc40    new schizophrenia drug"
         :return: the integer part of the DocID eg, returns int 40 for "Doc40    new schizophrenia drug"
         """
-        num = []
+        num = []  # stores separate digits of the number
         for char in line:
             if char.isdigit():
+                # as long as we encounter digit, append it. This is mostly to handle more than just single digit DocIDs
                 num.append(char)
             elif char == " ":
+                # if we encounter a space, that means the number is terminated, join the digits and return it
                 return int(''.join(num)) if (len(num) > 0) else False
-        # return false if no numeric digit was found in the line.
-        return int(''.join(num)) if (len(num) > 0) else False
+        return int(''.join(num)) if (len(num) > 0) else False  # return false if no numeric digit was found in the line
 
     def _calculate_and(self, list1: list, list2: list) -> list:
         """
@@ -178,17 +187,17 @@ class InvertedIndex:
         :param list2: second posting list
         :return: a list containing the result of AND operation between the two posting lists
         """
-        i, j = 0, 0  # to access indices i and j or list1 and list2 respectively
-        output = []
+        i, j = 0, 0  # to access indices i and j of list1 and list2 respectively
+        output = []  # stores the resultant list of DocIDs from AND operation
         while i < len(list1) and j < len(list2):
             if list1[i] == list2[j]:
-                output.append(list1[i])
+                output.append(list1[i])         # if both are equal, append either one
                 i += 1
                 j += 1
-            elif list1[i] < list2[j]:
+            elif list1[i] < list2[j]:           # otherwise, increment pointer from smaller list i.e. list1
                 i += 1
             else:
-                j += 1
+                j += 1                          # otherwise, increment pointer from smaller list i.e. list2
         return output
 
     def _calculate_or(self, list1: list, list2: list) -> list:
@@ -198,23 +207,23 @@ class InvertedIndex:
         :param list2: second posting list
         :return: a list containing the result of OR operation between the two posting lists
         """
-        i, j = 0, 0  # to access indices i and j or list1 and list2 respectively
-        output = []
+        i, j = 0, 0  # to access indices i and j of list1 and list2 respectively
+        output = []  # stores the resultant list of DocIDs from OR operation
         while i < len(list1) and j < len(list2):
             if list1[i] == list2[j]:
-                output.append(list1[i])
+                output.append(list1[i])         # if both are equal, append either one
                 i += 1
                 j += 1
-            elif list1[i] < list2[j]:
+            elif list1[i] < list2[j]:           # otherwise, append the smaller element from list1 and increment it
                 output.append(list1[i])
                 i += 1
-            elif list1[i] > list2[j]:
+            elif list1[i] > list2[j]:           # append the smaller element from list2 and increment it
                 output.append(list2[j])
                 j += 1
-        while i < len(list1):
+        while i < len(list1):                   # add the remaining elements from list1, OR
             output.append(list1[i])
             i += 1
-        while j < len(list2):
+        while j < len(list2):                   # add the remaining elements from list2
             output.append(list2[j])
             j += 1
         return output
